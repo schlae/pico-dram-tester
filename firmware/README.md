@@ -1,12 +1,10 @@
 # Glossary of Terms Related to Vintage RAM Operation and PIO Programming
 
-[[toc]]
-
 ## Pico PIO Programming
 
-### PIO - Programable IO
+### PIO - Programmable IO
 
-PIO is a hardware subsystem unique to the RP2040 microcontroller (used in the
+PIO is a hardware subsystem unique to the RP2040 micro controller (used in the
 Pico) that allows you to create custom digital interfaces using small,
 programmable state machines.
 
@@ -14,17 +12,17 @@ programmable state machines.
 
 The Pico 1 has eight PIO state machines. Think of a state machine as a
 microprocessor with a small and very task-specific instruction set.
-Each of these state machines can run independantly from its siblings
-and also the Pico's main ARM proceessor. The Pico 2 added four additional
+Each of these state machines can run independently from its siblings
+and also the Pico's main ARM processor. The Pico 2 added four additional
 state machines.
 
-Each state machine has its own output an input FIFOs which it uses to
-comminicate with the main processor.
+Each state machine has its own output and input FIFOs which it uses to
+communicate with the main processor.
 
 You can write state machine programs in raw assembly or - with the use of
 libraries - higher level languages.
 
-Each state machine can run  at a different clock cycle speed.
+Each state machine can run at a different clock cycle speed.
 
 ### FIFOs
 
@@ -86,7 +84,7 @@ Delay values, by default, represent an exact number of additional clock cycles.
 So the line above would take six cycles complete. If you are using sidesets,
 you will have a reduced number of delay values at your disposal - as delays and
 sides share the same bit range. We can however patch each delay number so that
-it is uesed as an index into a table of arbitraty values. This allows
+it is used as an index into a table of arbitrary values. This allows
 us to use the same PIO program with different sets of timings. You will
 see that the author of this project did just that! So we can use the same
 program to test ram a chip family at all of its manufactured speed ratings!
@@ -115,7 +113,7 @@ have a sideset:
         set pins, 0 side 0
         jmp loop side 1
 
-Optional sidesetting is enabled with the additon of the opt argument:
+Optional sidesetting is enabled with the addition of the opt argument:
 
     .side_set 1 opt
     loop:
@@ -125,7 +123,7 @@ Optional sidesetting is enabled with the additon of the opt argument:
 
 #### .pio Files
 
-Assembler proghrammes are usually written as text files with a .pio extension.
+Assembly programs are usually written as text files with a .pio extension.
 These files are then assembled with the RP2040 SDK or MicroPython. In this
 project the pio files also contain c bindings and wrapper functions for the
 PIO code. The pio files are converted into header files that can be included
@@ -159,7 +157,7 @@ PIO Blocks have their own instruction memory. All state machines in a
 given block share their PIO Block's instruction memory - which can store only 32
 commands in total.
 
-### GPIO State Machine Assignmemt
+### GPIO State Machine Assignment
 
 Each state machine in a PIO block can control a set of GPIO pins. You assign pins thusly:
 
@@ -168,7 +166,7 @@ Each state machine in a PIO block can control a set of GPIO pins. You assign pin
     sm_config_set_in_pins(&config, base_pin);
     sm_config_set_sideset_pins(&config, base_pin);
 
-Collectively, these four functions define how any pins acessible to a given
+Collectively, these four functions define how any pins accessible to a given
 state machine are affected by all available instructions. Each instruction
 type interacts with their pins differently:
 
@@ -187,3 +185,113 @@ type interacts with their pins differently:
 - You must also configure pin directions using `pio_sm_set_consecutive_pindirs()` or `pio_gpio_init()`.
 
 ## DRAM Operations
+
+### ramxxxx.pio files
+
+All ram files in this project run similar - or even identical - assembly loops.
+The loops are capable or performing either standard read cycle or a specific type
+of write cycle - which might be described as the earliest possible 'late write'.
+
+There is provison for fast page (CAS only) test loops, but many of the pio files
+lack the c bindings to make use of this.
+
+Reads or writes are differentiated by a c bind function argument. And have been coded
+to execute in the same number of pio clock cycles.
+
+The assembly loops include nop statements which can be used to introduce chip
+specific delays. Ideally they will ensure that key stages on a read or
+write cycle are being triggered 'just in spec', when compared to the minimum
+operating timings specified in a chip's data sheet for appropriately rated
+version.
+
+
+### The Read Loop
+
+#### Overview
+
+The Basic Read Loop runs as follows:
+
+#### Row and Column Address Select Pre-charging
+
+The Read Cycle Begins When The Row and Column Address Select Pins are Pulled
+High (after any preceding ram access operation was holding them low). They
+must remain high for a specified amount of time before then can be re-used as
+part of the next operation. This is known as pre-charing and the column and
+row address select pins will have their own minimum pre-charge times -
+referenced in the data sheet. Row and Column Address Select Precharge times
+are known as tRP and tCPN respectively. The row address select pin is commonly
+known as RAS and the column pin, CAS.
+
+A delay may be required between raising and CAS and RAS being lowered later in
+the cycle. This is known as tCRP. In practice, however, many chips specify a
+zero value. But CAS and RAS may be raised at the same time, and this is optimal
+for cases where tCRP is non-zero.
+
+#### Row Address Selection
+
+The ram chip will use the same address pins to specify which row and column holds
+the data bit we wish to access. We can set the row address while we are waiting
+for tRP to be met. Some chips require that we observe a delay between setting the
+address and the next stage in the cycle. This is known as tASR, but you will find
+that for some chips this value is zero and therefore of no consequence.
+set. For chips with a non-zero tASR, it is in our interest to set the row address
+immediately after raising RAS.
+
+#### Row Address Strobing
+
+With the address pins now holding the row address and tASR met, we can 'strobe'
+this into address into the chip. As hinted at previously, we do this by
+lowering the RAS pin. The starting and trailing edge of lowering of the RAS pin are
+the starting points for a number of key timings. Their minimum values must be met
+for normal operation of the chip.
+
+As RAS starts to fall, tRC and tRWC start. As RAS approaches its low level, tRAS,
+tAR, tCSH, tRCD and tRAC begin. The address pins must hold the row address for a
+short time after RAS goes low so that the chip has enough time to read and store the
+row value. This is known as tRAH. Once tRAH has elapsed, we are free to load the
+column address.
+
+#### Column Address Selection and Strobing
+
+This occurs in much the same way that a row address is loaded into the chip.
+tASC is the counterpart to tASR. As tCAH is to tRAH - in so much as it must
+have elapsed before we can make any changes to the values of the address pins.
+We can lower CAS once tRCD has reached its minimum value: tRCD(min). tRCD also
+has a maximum value and this is significant in determining when the data pin
+will contain valid data.
+
+CAS reaching its low value signifies the start of tCAH and tCAC.
+
+#### Valid Data Read
+
+Once we have set both the row and column addresses into the chip, we must wait
+a while for that addresses data bit to become available on the data out pin -
+known as Q. The amount of time we must wait depends upon exactly when some of
+preceding steps happened. If CAS was lowered before tRCD(max) we can access valid
+data once tRAC is reached. If CAS was lowered after tRCD(max) we must wait until
+tCAC is met. The fastest access time is only achievable with the former approach.
+
+### The Write Loop
+
+#### Late Write?
+
+An early write is one where the W pin is lowered before CAS is lowered within
+a threshold know as tWCS. For some chips, tWCS is zero. However, if CAS and W
+are lowered at the same time. It is not clear if we are performing an early or
+a late write - as W going low is not instantaneous and tWCS is measured from
+when W reaches its low level. So it is possible that - with our common
+test PIOs as they stand - that we are in late write mode with an indeterminate
+value on Q. It is assumed that the multiple write cycles can be safely performed
+end-on-end at tRC intervals, rather than tRWC. The author is not 100% clear on
+this point, but delays listed on the sheets in the timings directory currently
+rely on this assumption. CAS and W going low at the same time can never result
+in a valid Read-Write or Read-Modify-Write Cycle.
+
+### The Write Cycle
+
+This is very similar to the read cycle. The only differences are that:
+
+- we set the input data bit (D) when we set the column address
+- we also lower W when we lower CAS
+- both read and write timings must be met if - as we do - we share much
+of our write cycle code with our read cycle.
