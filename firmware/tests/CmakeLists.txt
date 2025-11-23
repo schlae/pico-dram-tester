@@ -1,0 +1,28 @@
+# tests/CMakeLists.txt
+project(unit_tests C)
+
+enable_testing()
+
+# --- Unity framework ---
+add_library(unity STATIC  ./unity/src/unity.c)
+target_include_directories(unity PUBLIC ./unity/src)
+
+# --- Your code under test ---
+add_library(mycode ../pmemtest.c)
+target_include_directories(mycode PUBLIC ..)
+target_include_directories(mycode PUBLIC ../build)
+
+# --- Macro to add a Unity test suite ---
+function(add_unity_test_suite suite_name source_file)
+    add_executable(${suite_name} ${source_file})
+    target_link_libraries(${suite_name} PRIVATE mycode unity)
+    add_test(NAME ${suite_name} COMMAND ${suite_name})
+endfunction()
+
+# --- Register test suites ---
+file(GLOB TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/test_*.c")
+foreach(TEST_FILE ${TEST_SOURCES})
+    get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
+    add_unity_test_suite(${TEST_NAME} ${TEST_FILE})
+endforeach()
+

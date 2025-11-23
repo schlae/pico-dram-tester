@@ -84,9 +84,9 @@ skip_ras:
 #define RAM4164_DELAYS 6
 #define RAM4164_DELAY_FIELDS 8
                                              //0   1   2  3   4   5   6   7
-static const uint8_t ram4164_delays[6][32] = {{0,  0, 17, 4, 12,  4,  0,  0},    // 100ns - tested on km4164b-10
-                                              {0,  0, 15, 4, 15,  4,  0,  0},    // 120ns - tighter of all Mnfctr values and -10% margin applied
-                                              {0,  0, 23, 5, 24,  6,  0,  0},    // 150ns
+static const uint8_t ram4164_delays[6][32] = {{0,  0, 15, 3, 11,  4,  0,  0},    // 100ns - tested on km4164b-10 No margin applied yet...
+                                              {0,  0, 14, 3, 15,  4,  0,  0},    // 120ns - tighter of all Mnfctr values and -10% margin applied
+                                              {0,  0, 18, 4, 20,  4,  0,  0},    // 150ns - tighter of all Mnfctr values and -15% margin applied
                                               {0, 11, 20, 7, 13, 21,  4,  9},    // 200ns
                                               {0, 20, 20, 8, 19, 24,  9, 10},    // 250ns
                                               {0, 20, 20, 9, 22, 27, 19,  1} };  // 300ns

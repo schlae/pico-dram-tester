@@ -46,7 +46,3 @@ target_sources(pmemtest PRIVATE pmemtest.c st7789.c gui.c pio_patcher.c xoroshir
 target_link_libraries(pmemtest PRIVATE pico_stdlib pico_multicore hardware_pio hardware_spi)
 
 pico_add_extra_outputs(pmemtest)
-
-#add_executable(test_runner test/test_runner.c test/unity/src/unity.c)
-#arget_include_directories(test_runner PRIVATE test/unity/src)
-
