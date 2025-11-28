@@ -7,7 +7,7 @@ chips.
 **This is an early beta release. The software is not completed. Feel free to
 build a tester and try it out, and submit bug reports.**
 
-![Photo of the board](pico-dram-tester.jpg)
+![Photo of the board](images/pico-dram-tester-rev2b.jpg)
 
 Benefits
 
@@ -22,6 +22,7 @@ Supported Devices
 * 4027 (4K x 1)
 * 4108 (8K x 1 that are 4116s with only half test good: MK4108, TMS4108, etc)
 * 4116 (16K x 1)
+* 4816 (16K x 1)
 * 4132 (32K x 1, piggyback)
 * 4132 (32K x 1 that are 4164s with only half tested good: TMS4532, M3732)
 * 4164 (64K x 1)
@@ -38,7 +39,11 @@ Out of scope
 
 ## Construction
 
-[Fab package](fab/pico-dram-tester-rev2.zip)
+Revision 2.2 adds a DC Barrel Jack option.  
+It also adds solder jumper pads to allow use of the original Panasonic Encoder
+or the common Generic Encoders.
+
+[Fab package](fab/pico-dram-tester-rev22.zip)
 
 [Schematic](pico-dram-tester.pdf)
 

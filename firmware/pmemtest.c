@@ -15,6 +15,11 @@
 #include "mem_chip.h"
 #include "xoroshiro64starstar.h"
 
+#include <bsp/board.h>
+#include <tusb.h>
+#include <ff.h>
+#include <flash.h>
+
 PIO pio;
 uint sm = 0;
 uint offset; // Returns offset of starting instruction
@@ -801,6 +806,11 @@ int main() {
     // Increase core voltage slightly (default is 1.1V) to better handle overclock
     vreg_set_voltage(VREG_VOLTAGE_1_25);
 
+    // USB Mass storage initialization
+    board_init();
+    tud_init(BOARD_TUD_RHPORT);
+    stdio_init_all();
+
     // PLL->prim = 0x51000.
 
     //stdio_uart_init_full(uart0, 57600, 28, 29); // 28=tx, 29=rx actually runs at 115200 due to overclock
@@ -853,6 +863,7 @@ int main() {
         do_encoder();
         do_buttons();
         do_status();
+        tud_task();
     }
 
     while(1) {

@@ -41,8 +41,37 @@ pico_generate_pio_header(pmemtest ${CMAKE_CURRENT_LIST_DIR}/ram41128.pio)
 pico_generate_pio_header(pmemtest ${CMAKE_CURRENT_LIST_DIR}/ram41256.pio)
 pico_generate_pio_header(pmemtest ${CMAKE_CURRENT_LIST_DIR}/ram_4bit.pio)
 
-target_sources(pmemtest PRIVATE pmemtest.c st7789.c gui.c pio_patcher.c xoroshiro64starstar.c)
+set(PICO_SDK_PATH "${USERHOME}/.pico-sdk/sdk/${sdkVersion}")
 
-target_link_libraries(pmemtest PRIVATE pico_stdlib pico_multicore hardware_pio hardware_spi)
+target_include_directories(pmemtest
+    PRIVATE ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source
+	${CMAKE_CURRENT_LIST_DIR}/submodules/pico-usb-flash-drive
+)
 
+target_sources(pmemtest PRIVATE
+    pmemtest.c st7789.c gui.c pio_patcher.c xoroshiro64starstar.c
+    ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source/ff.c
+    ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source/ffsystem.c
+    ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source/ffunicode.c
+    submodules/pico-usb-flash-drive/flash.c
+    submodules/pico-usb-flash-drive/fatfs_driver.c
+	submodules/pico-usb-flash-drive/usb_msc_driver.c
+	submodules/pico-usb-flash-drive/usb_descriptors.c
+)
+
+target_link_libraries(pmemtest PRIVATE
+    pico_stdlib
+    pico_multicore
+    hardware_pio
+    hardware_spi
+    tinyusb_additions
+    tinyusb_board
+    tinyusb_device
+    hardware_flash
+    hardware_sync
+)
+
+pico_enable_stdio_usb(pmemtest 1)
 pico_add_extra_outputs(pmemtest)
+
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/submodules/pico-usb-flash-drive) 
