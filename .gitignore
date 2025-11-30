@@ -1,0 +1,22 @@
+# Build artifacts
+firmware/build/
+*.elf
+*.bin
+*.hex
+*.map
+*.dis
+
+# KiCad artifacts  
+*-backups/
+fp-info-cache
+*.kicad_prl
+
+# Windows
+Thumbs.db
+*.round-tracks-config
+
+# Misc
+bom/
+production/
+fabrication-toolkit-options.json
+Dockerfile.warp
