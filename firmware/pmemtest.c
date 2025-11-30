@@ -5,6 +5,7 @@
 // Bug fix the 41128
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
@@ -86,6 +87,9 @@ typedef enum {
 } gui_state_t;
 
 gui_state_t gui_state = MAIN_MENU;
+
+// Forward declarations
+void print_serial_menu();
 
 void setup_main_menu()
 {
@@ -524,6 +528,15 @@ void start_the_ram_test()
     // Get the power turned on
     power_on();
 
+    // Print test information to serial
+    printf("\n--- Starting Test ---\n");
+    printf("Chip: %s\n", chip_list[main_menu.sel_line]->chip_name);
+    printf("Speed: %s\n", chip_list[main_menu.sel_line]->speed_names[speed_menu.sel_line]);
+    printf("Size: %d x %d bits\n", 
+           chip_list[main_menu.sel_line]->mem_size,
+           chip_list[main_menu.sel_line]->bits);
+    printf("Running tests: March-B, Pseudo, Refresh\n");
+
     // Get the PIO going
     chip_list[main_menu.sel_line]->setup_pio(speed_menu.sel_line, variants_menu.sel_line);
 
@@ -609,14 +622,102 @@ void do_status()
     uint16_t v;
     static uint16_t v_prev = 0;
     int test;
+    static int progress_counter = 0;
+    static int last_progress_addr = 0;
+    static int last_iteration = -1;
+    static int current_test_phase = -1;
 
     if (gui_state == DO_TEST) {
         do_visualization();
 
         // Update the status text
         if (queue_try_remove(&stat_cur_test, &test)) {
+            // Output final 100% for previous test before moving on
+            if (current_test_phase >= 0) {
+                printf("\r  [");
+                for (int i = 0; i < 20; i++) {
+                    printf("\xe2\x96\x88");  // Full blocks
+                }
+                printf("] 100%%");
+                if (current_test_phase == 0) {
+                    printf(" Bit %d/%d", chip_list[main_menu.sel_line]->bits,
+                           chip_list[main_menu.sel_line]->bits);
+                } else if (current_test_phase == 1) {
+                    printf(" Pass 64/64");
+                }
+                printf("\n");
+            }
             paint_status(120, 35, 110, "      ");
             paint_status(120, 35, 110, (char *)ram_test_names[test]);
+            current_test_phase = test;
+            // Show new test name
+            printf("\nRunning: %s\n", ram_test_names[test]);
+            last_progress_addr = 0;
+            progress_counter = 0;
+            last_iteration = -1;
+        }
+        
+        // Check if iteration changed and update header if multi-pass test
+        if (current_test_phase >= 0) {
+            int current_iteration = -1;
+            
+            if (current_test_phase == 0) {
+                current_iteration = stat_cur_bit;
+            } else if (current_test_phase == 1) {
+                current_iteration = stat_cur_subtest * 4 + stat_cur_bit;
+            }
+            
+            if (current_iteration != last_iteration && current_iteration >= 0) {
+                last_iteration = current_iteration;
+                last_progress_addr = 0;  // Reset progress tracking for new iteration
+            }
+        }
+        
+        // Show progress indicator periodically (only if test phase is active)
+        if (current_test_phase >= 0) {
+            progress_counter++;
+            if (progress_counter >= 5000) {
+                progress_counter = 0;
+                int mem_size = chip_list[main_menu.sel_line]->mem_size;
+                int progress_pct = (stat_cur_addr * 100) / mem_size;
+            
+            // Only update if progress changed significantly
+            if (abs(stat_cur_addr - last_progress_addr) > (mem_size / 40)) {
+                // Progress bar with 20 characters showing gradient
+                // Use Unicode block characters: full, 3/4, 1/2, 1/4
+                int filled = (progress_pct * 20) / 100;  // Full blocks
+                int remainder = ((progress_pct * 20) % 100) / 25;  // Partial block
+                
+                // Progress bar with iteration counter
+                printf("\r  [");
+                for (int i = 0; i < 20; i++) {
+                    if (i < filled) {
+                        printf("\xe2\x96\x88");  // Full block █
+                    } else if (i == filled) {
+                        // Partial blocks for smoother transition
+                        if (remainder >= 3) printf("\xe2\x96\x93");      // ▓
+                        else if (remainder >= 2) printf("\xe2\x96\x92"); // ▒
+                        else if (remainder >= 1) printf("\xe2\x96\x91"); // ░
+                        else printf(" ");
+                    } else {
+                        printf(" ");
+                    }
+                }
+                printf("] %3d%% ", progress_pct);
+                
+                // Show iteration info
+                if (current_test_phase == 0) {
+                    printf("Bit %d/%d", stat_cur_bit + 1, 
+                           chip_list[main_menu.sel_line]->bits);
+                } else if (current_test_phase == 1) {
+                    int pass_num = stat_cur_subtest * 4 + stat_cur_bit + 1;
+                    printf("Pass %d/64", pass_num);
+                }
+                
+                fflush(stdout);
+                last_progress_addr = stat_cur_addr;
+            }
+            }
         }
 
         // Check official status
@@ -627,24 +728,37 @@ void do_status()
             // No more drums
             cancel_repeating_timer(&drum_timer);
             queue_remove_blocking(&results_queue, &retval);
+            
+            // Output final 100% for last test
+            printf("\r  [");
+            for (int i = 0; i < 20; i++) {
+                printf("\xe2\x96\x88");
+            }
+            printf("] 100%%\n");
+            
             // Show the completion status
             gui_state = TEST_RESULTS;
             st7789_fill(STATUS_ICON_X, STATUS_ICON_Y, 32, 32, COLOR_LTGRAY); // Erase icon
             if (retval == 0) {
                 paint_status(120, 35, 110, "Passed!");
                 draw_icon(STATUS_ICON_X, STATUS_ICON_Y, &check_icon);
+                printf("\n*** TEST PASSED ***\n\n");
             } else {
                 draw_icon(STATUS_ICON_X, STATUS_ICON_Y, &error_icon);
+                printf("\n");
                 if (chip_list[main_menu.sel_line]->bits == 4) {
                     sprintf(retstring, "Failed %d%d%d%d", (retval >> 3) & 1,
                                                            (retval >> 2) & 1,
                                                             (retval >> 1) & 1,
                                                             (retval & 1));
                     paint_status(120, 105, 110, retstring);
+                    printf("\n*** TEST FAILED: %s ***\n\n", retstring);
                 } else {
                     paint_status(120, 105, 110, "Failed");
+                    printf("\n*** TEST FAILED (error code: 0x%X) ***\n\n", retval);
                 }
             }
+            print_serial_menu();
         }
     }
 }
@@ -655,6 +769,7 @@ void button_action()
     // Do something based on the current menu
     switch (gui_state) {
         case MAIN_MENU:
+            printf("Selected chip: %s\n", chip_list[main_menu.sel_line]->chip_name);
             // Check for variant
             if (chip_list[main_menu.sel_line]->variants == NULL) {
                 gui_state = SPEED_MENU;
@@ -777,6 +892,158 @@ void do_encoder()
     }
 }
 
+// Print current menu state to serial
+void print_serial_menu()
+{
+    int i;
+    printf("\n");
+    
+    switch (gui_state) {
+        case MAIN_MENU:
+            printf("=== Select Chip ===\n");
+            for (i = 0; i < main_menu.tot_lines; i++) {
+                if (i == main_menu.sel_line) {
+                    printf("  > %d. %s\n", i + 1, main_menu.items[i]);
+                } else {
+                    printf("    %d. %s\n", i + 1, main_menu.items[i]);
+                }
+            }
+            printf("\nCommands: [Up/Down arrows or w/s] navigate, [Enter] confirm, [h] help\n");
+            break;
+            
+        case VARIANT_MENU:
+            printf("=== Select Variant ===\n");
+            for (i = 0; i < variants_menu.tot_lines; i++) {
+                if (i == variants_menu.sel_line) {
+                    printf("  > %d. %s\n", i + 1, variants_menu.items[i]);
+                } else {
+                    printf("    %d. %s\n", i + 1, variants_menu.items[i]);
+                }
+            }
+            printf("\nCommands: [Up/Down arrows or w/s] navigate, [Enter] confirm, [b] back, [h] help\n");
+            break;
+            
+        case SPEED_MENU:
+            printf("=== Select Speed Grade ===\n");
+            for (i = 0; i < speed_menu.tot_lines; i++) {
+                if (i == speed_menu.sel_line) {
+                    printf("  > %d. %s\n", i + 1, speed_menu.items[i]);
+                } else {
+                    printf("    %d. %s\n", i + 1, speed_menu.items[i]);
+                }
+            }
+            printf("\nCommands: [Up/Down arrows or w/s] navigate, [Enter] confirm, [b] back, [h] help\n");
+            break;
+            
+        case DO_SOCKET:
+            printf("\n>>> Place chip in socket and press [Enter] to start test <<<\n");
+            printf("    Or press [b] to go back\n");
+            break;
+            
+        case DO_TEST:
+            printf("\n>>> Test in progress... <<<\n");
+            break;
+            
+        case TEST_RESULTS:
+            printf("\nCommands: [Enter] retest, [b] back to menu\n");
+            break;
+    }
+}
+
+// Process serial commands
+void do_serial_commands()
+{
+    static int escape_state = 0;
+    int c;
+    
+    // Non-blocking character read
+    c = getchar_timeout_us(0);
+    if (c == PICO_ERROR_TIMEOUT) {
+        return;
+    }
+    
+    // Handle ANSI escape sequences for arrow keys
+    // Arrow keys send: ESC [ A (up), ESC [ B (down), ESC [ C (right), ESC [ D (left)
+    if (escape_state == 0 && c == 27) { // ESC
+        escape_state = 1;
+        return;
+    } else if (escape_state == 1 && c == '[') {
+        escape_state = 2;
+        return;
+    } else if (escape_state == 2) {
+        escape_state = 0;
+        switch (c) {
+            case 'A': // Up arrow
+                wheel_decrement();
+                print_serial_menu();
+                return;
+            case 'B': // Down arrow
+                wheel_increment();
+                print_serial_menu();
+                return;
+        }
+        return;
+    }
+    escape_state = 0;
+    
+    // Handle commands based on current state
+    switch (c) {
+        case '\r':
+        case '\n':
+            // Enter key - confirm selection
+            if (gui_state != DO_TEST) {
+                button_action();
+                print_serial_menu();
+            }
+            break;
+            
+        case 'b':
+        case 'B':
+            // Back button
+            if (gui_state != MAIN_MENU && gui_state != DO_TEST) {
+                button_back();
+                print_serial_menu();
+            }
+            break;
+            
+        case 'h':
+        case 'H':
+        case '?':
+            // Help
+            printf("\n=== HELP ===\n");
+            printf("Navigation:\n");
+            printf("  Up/Down arrows or w/s - Move through menu items\n");
+            printf("  Enter - Confirm selection / Start test\n");
+            printf("  b - Go back to previous menu\n");
+            printf("  h or ? - Show this help\n");
+            printf("\nWorkflow:\n");
+            printf("  1. Select chip type\n");
+            printf("  2. Select variant (if applicable)\n");
+            printf("  3. Select speed grade\n");
+            printf("  4. Place chip in socket and press Enter\n");
+            printf("  5. Test runs automatically\n");
+            printf("  6. Press Enter to retest or b to return to menu\n");
+            print_serial_menu();
+            break;
+            
+        case 'w':
+        case 'W':
+        case '+':
+            // Up/previous
+            wheel_decrement();
+            print_serial_menu();
+            break;
+            
+        case 's':
+        case 'S':
+        case '-':
+            // Down/next
+            wheel_increment();
+            print_serial_menu();
+            break;
+    }
+}
+
 void init_buttons_encoder()
 {
     gpio_init(GPIO_QUAD_A);
@@ -802,11 +1069,12 @@ int main() {
 
     // PLL->prim = 0x51000.
 
-    //stdio_uart_init_full(uart0, 57600, 28, 29); // 28=tx, 29=rx actually runs at 115200 due to overclock
-    //gpio_init(15);
-    //gpio_set_dir(15, GPIO_OUT);
+    // Initialize USB serial output
+    stdio_init_all();
+    sleep_ms(1000); // Give host time to connect
+    printf("\n=== Pico DRAM Tester ===\n");
+    printf("USB Serial Output Enabled\n\n");
 
-    //printf("Test.\n");
     psrand_init_seeds();
 
     gpio_init(GPIO_LED);
@@ -832,6 +1100,9 @@ int main() {
     show_main_menu();
     init_buttons_encoder();
 
+    // Show initial serial menu
+    printf("\nSerial interface ready. Press 'h' for help.\n");
+    print_serial_menu();
 
 // Testing
 #if 0
@@ -851,6 +1122,7 @@ int main() {
     while(1) {
         do_encoder();
         do_buttons();
+        do_serial_commands();
         do_status();
     }
 
