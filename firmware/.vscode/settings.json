@@ -45,5 +45,9 @@
         "sideset",
         "sidesets",
         "sidesetting"
-    ]
+    ],
+    "files.associations": {
+        "pio.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "enabled"
 }

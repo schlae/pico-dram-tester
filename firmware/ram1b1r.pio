@@ -1,5 +1,6 @@
+
 ;
-; 4164 (and 4132 half-qualified chips) Test Program
+; All 1 bit ram chips with a simgle RAS (64 kilobits or less)
 ;
 
 ; Pin Assignments
@@ -10,7 +11,7 @@
 ; SP4,  A4,  9,  output, out
 ; SP5,  A5,  10, output, out
 ; SP6,  A6,  11, output, out
-; SP7,  A7,  12, output, out
+; SP7,  A7,  12, output, out (nc on lower capacities)
 ; SP8,  nc,  13, output, out
 ; SP9,  D,   14, output, out
 ; SP10, WE,  15, output, set
@@ -21,11 +22,13 @@
 ; SP15, nc,  20, na,     na
 ; SP16, Q,   21, input,  in
 
-; Timing values (nameplate, tRAC): 100ns, 120ns, 150ns, 200ns, 300ns
 ; set pins: CAS, RAS, WR.
 
-.pio_version 0 // only requires PIO version 0
-.program ram4164
+; only requires PIO version 0
+.pio_version 0
+
+; Program shared by all 1bit 1 ras chips
+.program ram1b1r
 
 ; Notes:
 ; We need to update the address lines and the RAS at the same time.
@@ -52,7 +55,7 @@ cas_only_transfer:
     out pins, 10          ; Set the column address and data bit. Setting the data bit now allows for early and late write scenarios. tRAH must be met.
     jmp !x skip_wr        ; Write... or don't...We make sure that the branching paths take the same time.
     set pins, 0b000       ; Lower WR and CAS Start of tWP and tWCH and tCAS. tCPN must be met. If we factor in transition timings, we are perhaps now in Late Write mode with indeterminate data out.
-    jmp skip_wr2           ; Jump back to shared codepath.
+    jmp skip_wr2          ; Jump back to shared codepath.
 skip_wr:
     set pins, 0b001       ; Lower CAS Start of tCAH and tCAS. tRCD(min) and tCPN must be met. tRCD(max) must not (so that tRAC determines data availability later).
     nop                   ; Ensure that both branches take the same amount of time.
@@ -77,3 +80,7 @@ skip_ras:
     jmp !y full_transfer  ; 
     out NULL, 8 [7]       ; Wait [7]
     jmp cas_only_transfer ;
+
+% c-sdk {
+#define RAM1B1R_DELAY_SET_COLS 8
+%}
