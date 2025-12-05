@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Pico",
+        "compilers": {
+            "C": "${command:raspberry-pi-pico.getCompilerPath}",
+            "CXX": "${command:raspberry-pi-pico.getCxxCompilerPath}"
+        },
+        "cmakeSettings": {
+            "Python3_EXECUTABLE": "${command:raspberry-pi-pico.getPythonPath}"
+        }
+    }
+]

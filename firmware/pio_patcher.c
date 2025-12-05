@@ -34,6 +34,7 @@ void pio_patch_delays(const uint8_t *delays, uint8_t length)
 
     for (i = 0; i < 31; i++) {
         field = (current_pio_instructions[i] >> 8) & 0x1f;
+
         // 0 is reserved for instructions that don't use this feature
         if ((field > 0) && (field < length)) {
             instr = current_pio_instructions[i] & 0xe0ff;

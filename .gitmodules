@@ -1,0 +1,6 @@
+[submodule "firmware/tests/unity"]
+	path = firmware/tests/unity
+	url = https://github.com/ThrowTheSwitch/Unity.git
+[submodule "firmware/submodules/pico-usb-flash-drive"]
+	path = firmware/submodules/pico-usb-flash-drive
+	url = https://github.com/oyama/pico-usb-flash-drive

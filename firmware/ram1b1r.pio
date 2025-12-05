@@ -1,0 +1,83 @@
+; All 1 bit ram chips with a single RAS (64 kilobits or less)
+
+; Pin Assignments
+; SP0,  A0,  5,  output, out
+; SP1,  A1,  6,  output, out
+; SP2,  A2,  7,  output, out
+; SP3,  A3,  8,  output, out
+; SP4,  A4,  9,  output, out
+; SP5,  A5,  10, output, out
+; SP6,  A6,  11, output, out
+; SP7,  A7,  12, output, out (nc on lower capacities)
+; SP8,  nc,  13, output, out
+; SP9,  D,   14, output, out
+; SP10, WE,  15, output, set
+; SP11, RAS, 16, output, set
+; SP12, CAS, 17, output, set
+; SP13, nc,  18, na,     na
+; SP14, nc,  19, na,     na
+; SP15, nc,  20, na,     na
+; SP16, Q,   21, input,  in
+
+; set pins: CAS, RAS, WR.
+
+; only requires PIO version 0
+.pio_version 0
+
+; Program shared by all 1bit 1 ras chips
+.program ram1b1r
+
+; Notes:
+; We need to update the address lines and the RAS at the same time.
+; All current C bindings disable fast page mode. So the the fast page code
+; path below is not currently used.
+;
+; The write pulse starts at the same time as CAS is brought low. Making this
+; a "Late Write" cycle. This is very similar to the read-modify-write
+; cycle except that the timing parameters, tRWD and tCWD, are not
+; necessarily met. The state of data-out is indeterminate since the
+; output pin could be either Hi-Z (effectivley disconnected) or contain
+; data depending on the timing conditions. 
+; tVALUES and timings calculated below are for 100ns chip and its delays.
+
+main:
+    jmp begin
+full_transfer:            ; 
+    nop [1]               ; Wait [1]
+    nop [2]               ; Wait [2]
+    out pins, 8           ; Set the row address
+    set pins, 0b101       ; Lower RAS. tRP must be met. Start of tRAC, tRAH, tRAS, tRCD and tWCR timings.
+    nop [3]               ; Wait [3]
+cas_only_transfer:
+    out pins, 10          ; Set the column address and data bit. Setting the data bit now allows for early and late write scenarios. tRAH must be met.
+    jmp !x skip_wr        ; Write... or don't...We make sure that the branching paths take the same time.
+    set pins, 0b000       ; Lower WR and CAS Start of tWP and tWCH and tCAS. tCPN must be met. If we factor in transition timings, we are perhaps now in Late Write mode with indeterminate data out.
+    jmp skip_wr2          ; Jump back to shared codepath.
+skip_wr:
+    set pins, 0b001       ; Lower CAS Start of tCAH and tCAS. tRCD(min) and tCPN must be met. tRCD(max) must not (so that tRAC determines data availability later).
+    nop                   ; Ensure that both branches take the same amount of time.
+skip_wr2:
+    mov OSR, NULL         ; Blank the State Machine's Output Shift Register.
+    nop [4]               ; Wait [4]
+    set pins, 0b001       ; Raise WR. tWP, tWCH and tWCR must be met.
+    out pins, 10          ; Clear column address and the write bit (we're OUTing all zeros to the pins). tCAH must be met for read cycles.
+    nop [5]               ; Wait [5]
+    in pins, 1            ; Read the read data bit into the OSR. tRAC must be met. In our configured write mode, Q will be garbage.
+    set pins, 0b101       ; Raise CAS. tCAS must be met.
+    push noblock          ; 
+    nop [6]               ; Wait [6]
+    jmp !y begin          ; tRAS and tRC must have been met.
+    jmp skip_ras          ; 
+begin:
+    set pins, 0b111       ; Raise RAS, CAS & WR.  tRP and tCPN
+skip_ras:
+    pull block            ; 
+    out y, 1              ;  
+    out x, 1              ; 
+    jmp !y full_transfer  ; 
+    out NULL, 8 [7]       ; Wait [7]
+    jmp cas_only_transfer ;
+
+% c-sdk {
+#define RAM1B1R_DELAY_SET_COLS 8
+%}
