@@ -12,13 +12,6 @@ pico_sdk_init()
 
 add_executable(pmemtest)
 
-target_compile_definitions(pmemtest PRIVATE
-	PLL_SYS_REFDIV=1
-	PLL_SYS_VCO_FREQ_HZ=1500000000
-	PLL_SYS_POSTDIV1=5
-	PLL_SYS_POSTDIV2=1
-)
-
 pico_generate_pio_header(pmemtest ${CMAKE_CURRENT_LIST_DIR}/ram4164.pio)
 pico_generate_pio_header(pmemtest ${CMAKE_CURRENT_LIST_DIR}/ram4116.pio)
 pico_generate_pio_header(pmemtest ${CMAKE_CURRENT_LIST_DIR}/ram4132.pio)

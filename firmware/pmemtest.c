@@ -11,6 +11,7 @@
 #include "pico/util/queue.h"
 #include "hardware/pio.h"
 #include "hardware/vreg.h"
+#include "hardware/clocks.h"
 #include "pio_patcher.h"
 #include "mem_chip.h"
 #include "xoroshiro64starstar.h"
@@ -798,7 +799,11 @@ int main() {
     int i, retval;
 
     // Increase core voltage slightly (default is 1.1V) to better handle overclock
-    vreg_set_voltage(VREG_VOLTAGE_1_15);
+    vreg_set_voltage(VREG_VOLTAGE_1_20);
+    sleep_ms(50);
+
+    // Overclock to 300 Mhz
+    set_sys_clock_pll(1500000000, 5, 1);
 
     // PLL->prim = 0x51000.
 
