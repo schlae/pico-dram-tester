@@ -23,4 +23,8 @@ target_sources(pmemtest PRIVATE pmemtest.c st7789.c gui.c pio_patcher.c xoroshir
 
 target_link_libraries(pmemtest PRIVATE pico_stdlib pico_multicore hardware_pio hardware_spi)
 
+# Enable USB serial output
+pico_enable_stdio_usb(pmemtest 1)
+pico_enable_stdio_uart(pmemtest 0)
+
 pico_add_extra_outputs(pmemtest)
